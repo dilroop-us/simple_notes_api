@@ -194,12 +194,6 @@ def create_task(task: Task, user_email: str = Depends(get_current_user)):
     db.collection("users").document(user_id).collection("tasks").document(task_id).set(task_data)
     return {"message": "Task created successfully", "task_id": task_id}
 
-# 🔐 Logout
-@app.post("/logout/")
-def logout_user(token: str = Depends(oauth2_scheme)):
-    token_blacklist.add(token)
-    return {"message": "User logged out successfully"}
-
 
 @app.get("/tasks/")
 def get_all_tasks(user_email: str = Depends(get_current_user)):
