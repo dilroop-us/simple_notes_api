@@ -81,6 +81,10 @@ class User(BaseModel):
     email: str
     password: str
 
+class UserProfile(BaseModel):
+    name: str
+    email: str
+
 # ✅ Task Model
 class Task(BaseModel):
     title: str
@@ -157,6 +161,24 @@ def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
     )
 
     return {"access_token": access_token, "token_type": "bearer", "expires_in": 7 * 24 * 60 * 60}  # Expiration in seconds
+
+@app.get("/profile/", response_model=UserProfile)
+def get_profile(user_email: str = Depends(get_current_user)):
+    user_ref = db.collection("users").where(filter=FieldFilter("email", "==", user_email)).stream()
+    user_doc = None
+    for doc in user_ref:
+        user_doc = doc.to_dict()
+        break
+
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Exclude password from response
+    user_profile = {
+        "name": user_doc.get("name"),
+        "email": user_doc.get("email"),
+    }
+    return user_profile
 
 
 # 📌 Create Task with User-Specific Priority & Category
