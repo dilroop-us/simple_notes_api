@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 import firebase_admin
@@ -14,6 +14,8 @@ import os
 import json
 from dotenv import load_dotenv
 import base64
+from typing import Optional
+
 
 # ✅ Load environment variables from .env file
 load_dotenv()
@@ -218,9 +220,13 @@ def create_task(task: Task, user_email: str = Depends(get_current_user)):
 
 
 @app.get("/tasks/")
-def get_all_tasks(user_email: str = Depends(get_current_user)):
+def get_all_tasks(
+    category: Optional[str] = Query(None),
+    user_email: str = Depends(get_current_user)
+):
     """
     Retrieve all tasks for the authenticated user.
+    Supports optional filtering by category.
     """
     # Get the user's Firestore document ID
     user_ref = db.collection("users").where("email", "==", user_email).stream()
@@ -229,8 +235,12 @@ def get_all_tasks(user_email: str = Depends(get_current_user)):
     if not user_id:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Fetch all tasks from the user's task collection
-    tasks_ref = db.collection("users").document(user_id).collection("tasks").stream()
+    # 🔍 Filter tasks by category if provided
+    tasks_query = db.collection("users").document(user_id).collection("tasks")
+    if category:
+        tasks_query = tasks_query.where(filter=FieldFilter("category", "==", category))
+
+    tasks_ref = tasks_query.stream()
     tasks = [{**task.to_dict(), "taskId": task.id} for task in tasks_ref]
 
     return {"tasks": tasks}
