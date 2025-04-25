@@ -102,6 +102,9 @@ class TaskUpdate(BaseModel):
     priority: str = None
     category: str = None
 
+class CategoryCreate(BaseModel):
+    name: str
+
 # ✅ JWT Token Function
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -198,11 +201,6 @@ def create_task(task: Task, user_email: str = Depends(get_current_user)):
     # ✅ Ensure priority is predefined (users CANNOT create new priorities)
     if task.priority not in PREDEFINED_PRIORITIES:
         raise HTTPException(status_code=400, detail="Invalid priority. Please choose from predefined priorities.")
-
-    # ✅ Store User-Specific Category (users CAN create new categories)
-    if task.category not in PREDEFINED_CATEGORIES:
-        db.collection("users").document(user_id).collection("categories").document(task.category).set({"name": task.category})
-
 
     # ✅ Create Task in User's Task Subcollection
     task_id = str(uuid4())
@@ -301,6 +299,23 @@ def get_all_categories():
 
 
 # 📌 Get User-Specific Categories
+
+
+@app.post("/users/categories/")
+def create_user_category(category: CategoryCreate, user_email: str = Depends(get_current_user)):
+    user_ref = db.collection("users").where("email", "==", user_email).stream()
+    user_id = next((doc.id for doc in user_ref), None)
+
+    if not user_id:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    category_ref = db.collection("users").document(user_id).collection("categories").document(category.name)
+    if category_ref.get().exists:
+        raise HTTPException(status_code=400, detail="Category already exists")
+
+    category_ref.set({"name": category.name})
+    return {"message": "Category created successfully"}
+
 @app.get("/users/categories/")
 def get_user_categories(user_email: str = Depends(get_current_user)):
     user_ref = db.collection("users").where("email", "==", user_email).stream()
