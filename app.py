@@ -9,7 +9,7 @@ from jose import jwt, JWTError
 import json
 from uuid import uuid4
 from google.cloud.firestore import FieldFilter
-from google.cloud.firestore_v1 import FieldFilter
+from google.cloud.firestore_v1 import FieldFilter, And
 import os
 import json
 from dotenv import load_dotenv
@@ -220,23 +220,34 @@ def create_task(task: Task, user_email: str = Depends(get_current_user)):
 @app.get("/tasks/")
 def get_all_tasks(
     category: Optional[str] = Query(None),
+    due_date: Optional[datetime] = Query(None),
     user_email: str = Depends(get_current_user)
 ):
     """
     Retrieve all tasks for the authenticated user.
-    Supports optional filtering by category.
+    Supports optional filtering by category and a specific due date (date only).
     """
-    # Get the user's Firestore document ID
+    # Get user ID
     user_ref = db.collection("users").where("email", "==", user_email).stream()
     user_id = next((doc.id for doc in user_ref), None)
 
     if not user_id:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 🔍 Filter tasks by category if provided
     tasks_query = db.collection("users").document(user_id).collection("tasks")
+
+    filters = []
     if category:
-        tasks_query = tasks_query.where(filter=FieldFilter("category", "==", category))
+        filters.append(FieldFilter("category", "==", category))
+    if due_date:
+        # Filter tasks due on that specific date (between 00:00 and 23:59 of that day)
+        start_of_day = datetime.combine(due_date.date(), datetime.min.time())
+        end_of_day = datetime.combine(due_date.date(), datetime.max.time())
+        filters.append(FieldFilter("dueDate", ">=", start_of_day))
+        filters.append(FieldFilter("dueDate", "<=", end_of_day))
+
+    if filters:
+        tasks_query = tasks_query.where(filter=And(*filters))
 
     tasks_ref = tasks_query.stream()
     tasks = [{**task.to_dict(), "taskId": task.id} for task in tasks_ref]
