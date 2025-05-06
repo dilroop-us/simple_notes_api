@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Body
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 import firebase_admin
@@ -83,9 +83,15 @@ class User(BaseModel):
     email: str
     password: str
 
-class UserProfile(BaseModel):
+class UserProfile(BaseModel):  # response
     name: str
     email: str
+    profileImage: Optional[str] = None
+
+class UserProfileUpdate(BaseModel):  # editing
+    name: Optional[str] = None
+    profileImage: Optional[str] = None
+
 
 # ✅ Task Model
 class Task(BaseModel):
@@ -182,8 +188,29 @@ def get_profile(user_email: str = Depends(get_current_user)):
     user_profile = {
         "name": user_doc.get("name"),
         "email": user_doc.get("email"),
+        "profileImage": user_doc.get("profileImage", None)
     }
     return user_profile
+
+
+
+@app.patch("/profile/image/")
+def update_profile_image(
+    profileImage: str = Body(..., embed=True),
+    user_email: str = Depends(get_current_user)
+):
+    """
+    Update only the user's profile image.
+    """
+    user_ref = db.collection("users").where("email", "==", user_email).stream()
+    user_id = next((doc.id for doc in user_ref), None)
+
+    if not user_id:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.collection("users").document(user_id).update({"profileImage": profileImage})
+    return {"message": "Profile image updated successfully"}
+
 
 
 # 📌 Create Task with User-Specific Priority & Category
