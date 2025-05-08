@@ -273,7 +273,9 @@ def get_all_tasks(
         filters.append(FieldFilter("dueDate", ">=", start_of_day))
         filters.append(FieldFilter("dueDate", "<=", end_of_day))
 
-    if filters:
+    if len(filters) == 1:
+        tasks_query = tasks_query.where(filter=filters[0])
+    elif len(filters) > 1:
         tasks_query = tasks_query.where(filter=And(*filters))
 
     tasks_ref = tasks_query.stream()
